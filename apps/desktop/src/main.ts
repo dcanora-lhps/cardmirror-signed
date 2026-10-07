@@ -39,6 +39,7 @@ import { registerVoiceIpc } from './voice/ipc';
 import { registerFlowIpc } from './flow-bridge.js';
 import { registerPairingIpc, relayUrl } from './pairing-ipc.js';
 import { LITE_BUILD } from './lite-build.js';
+import { UPDATES_DISABLED } from './updates-disabled.js';
 import {
   readAccessibilityTreeEnabled,
   writeAccessibilityTreeEnabled,
@@ -665,6 +666,9 @@ ipcMain.handle('host:toggle-devtools', (event) => {
  *  do the same. */
 ipcMain.handle('host:check-for-updates', async () => {
   if (!app.isPackaged) return { status: 'dev' };
+  if (UPDATES_DISABLED) {
+    return { status: 'error', message: 'Updates are managed by your organization.' };
+  }
   return new Promise<{ status: 'latest' | 'updating' | 'error'; message?: string }>((resolve) => {
     const offNotAvailable = (): void => {
       autoUpdater.removeListener('update-not-available', notAvailable);
@@ -2960,7 +2964,7 @@ function buildMenu(): Menu {
       { type: 'separator' },
       // Lite never contacts an update server — the menu item goes
       // rather than clicking into silence.
-      ...(LITE_BUILD
+      ...(LITE_BUILD || UPDATES_DISABLED
         ? []
         : [
             {
@@ -3180,7 +3184,7 @@ interface UpdateCheckOpts {
  *  dialog only for the manual path (`opts.alertOnLatest`); the
  *  auto-launch path is a complete no-op in dev. */
 function runUpdateCheck(opts: UpdateCheckOpts): void {
-  if (LITE_BUILD) return; // Lite never contacts the update host
+  if (LITE_BUILD || UPDATES_DISABLED) return; // never contact the update host
   if (!app.isPackaged) {
     if (opts.alertOnLatest) {
       const win = dialogParentWindow();
@@ -3554,7 +3558,7 @@ ipcMain.handle('host:update-chip-action', () => {
 });
 
 function startAutoUpdate(): void {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged || UPDATES_DISABLED) return;
   // macOS: Squirrel.Mac can't INSTALL into unsigned/self-signed builds,
   // but electron-updater's download path (zip + sha512 verification
   // against the release metadata) works fine — so we stage manually via
